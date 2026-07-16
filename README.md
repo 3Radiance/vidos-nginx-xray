@@ -1,10 +1,7 @@
 # vidos-nginx-xray
 Сюда залил все что было в видосе + конкретней через иишку прогнал 
 
-<details>
-<summary>📋 1. Настройка Nginx (/etc/nginx/sites-available/yourdomain.com)</summary>
 
-Создайте конфигурационный файл для вашего домена:
 ```nginx
 # default_server для обработки мусорных запросов по HTTP (Drop)
 server {
