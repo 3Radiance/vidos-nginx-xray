@@ -448,7 +448,7 @@ cd zapret-master/binaries/my
 
 # Запуск демона nfqws с кастомным фейк-SNI и дублированием сессий
 sudo ./nfqws --qnum=300 --hostlist=hosts.txt \
---dpi-desync=fake,multisplit --dpi-desync-split-pos=2 --dpi-desync-split-seqovl=681 --dpi-desync-fooling=ts --dpi-desync-repeats=4 --dpi-desync-fake-tls-mod=rnd,dupsid,sni=https://www.google.com\
+--dpi-desync=fake,multisplit --dpi-desync-split-pos=2 --dpi-desync-split-seqovl=681 --dpi-desync-fooling=ts --dpi-desync-repeats=4 --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com\
 --dpi-desync-any-protocol=1 --dpi-desync-udplen-increment=2 \
 --bind-fix4 --bind-fix6 \
 --user=nobody &
@@ -541,9 +541,7 @@ JSON
 
 Для обхода локальных утечек DNS включите во вкладке приватности браузера технологию DNS-over-HTTPS (DoH) и укажите адрес сервера:
 Plaintext
-
-[https://dns.google/dns-query](https://dns.google/dns-query)
-
+https://dns.google/dns-query
 Bash
 
 # 1. Обновление ОС
@@ -553,7 +551,7 @@ sudo apt update && sudo apt upgrade -y
 sudo apt install nginx certbot python3-certbot-nginx -y
 
 # 3. Развертывание панели 3X-UI
-bash <(curl -Ls [https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh](https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh))
+bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)
 
 # 4. Выпуск Let's Encrypt SSL-сертификата
 sudo systemctl enable nginx
@@ -579,7 +577,7 @@ sudo ufw allow 22/tcp  # Оставьте ваш реальный порт SSH, 
 sudo ufw enable
 
 # 8. Установка и запуск wstunnel
-sudo wget [https://github.com/erebe/wstunnel/releases/download/v10.6.1/wstunnel_10.6.1_linux_amd64.tar.gz](https://github.com/erebe/wstunnel/releases/download/v10.6.1/wstunnel_10.6.1_linux_amd64.tar.gz)
+sudo wget https://github.com/erebe/wstunnel/releases/download/v10.6.1/wstunnel_10.6.1_linux_amd64.tar.gz
 sudo tar -xzvf wstunnel_10.6.1_linux_amd64.tar.gz
 sudo mv wstunnel /usr/local/bin/
 sudo chmod +x /usr/local/bin/wstunnel
