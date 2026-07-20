@@ -1,5 +1,6 @@
 # vidos-nginx-xray
 Сюда залил все что было в видосе + конкретней через иишку прогнал 
+Скрипт внизу
 
 
 ```nginx
@@ -581,3 +582,59 @@ sudo wget https://github.com/erebe/wstunnel/releases/download/v10.6.1/wstunnel_1
 sudo tar -xzvf wstunnel_10.6.1_linux_amd64.tar.gz
 sudo mv wstunnel /usr/local/bin/
 sudo chmod +x /usr/local/bin/wstunnel
+
+upd:
+Закрываем сервак для всех кроме клоудфаер
+В чём прикол: 
+Из-за утечек домена и IP (например, через DNS или старые логи), боты и цензоры могут постучаться напрямую на ваш реальный IP-адрес, подсунув в SNI ваш валидный домен. 
+Если порты открыты на весь мир, Nginx честно схавает этот запрос и ответит. 
+Это огромная дыра в безопасности, которая полностью деанонимизирует сервер для ТСПУ и сканеров (Censys, Shodan).  Раз наш VLESS-трафик и SSH (wstunnel) и так полностью завернуты в CDN, мы можем превратить сервер в абсолютную черную дыру для всех левых прохожих. Мы оставим в живых на фаерволе ТОЛЬКО подсети самой Cloudflare. 
+Теперь любые прямые попытки ботов постучаться по IP (даже с правильным SNI) наткнутся на глухой таймаут (DROP) на уровне ядра Linux, потому что до Nginx пакет просто не долетит. 
+Сервер полностью пропадает с радаров глобального интернета.
+Как сделать:
+Сносим старые глобальные правила в UFW, чтобы порты 80 и 443 больше не светились на весь мир: 
+```bash
+sudo ufw delete allow 80/tcp
+sudo ufw delete allow 443/tcp
+```
+Пишем «умный» автоматический скрипт с комментариями правил, чтобы ufw не забивался дубликатами. 
+Создаем файл:
+
+sudo nano /etc/cron.weekly/cloudflare-ufw
+
+Вставляем Bash-код:
+```bash
+#!/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+CF_IPV4=$(curl -s https://www.cloudflare.com/ips-v4)
+CF_IPV6=$(curl -s https://www.cloudflare.com/ips-v6)
+
+if [ -z "$CF_IPV4" ]; then
+    echo "Ошибка: не удалось загрузить IP Cloudflare"
+    exit 1
+fi
+
+
+ufw status numbered | grep 'CF_AUTO' | awk -F"[][]" '{print $2}' | sort -rn | xargs -I {} ufw --force delete {}
+
+
+for ip in $CF_IPV4; do
+    ufw allow from "$ip" to any port 80 proto tcp comment 'CF_AUTO'
+    ufw allow from "$ip" to any port 443 proto tcp comment 'CF_AUTO'
+done
+
+
+for ip in $CF_IPV6; do
+    ufw allow from "$ip" to any port 80 proto tcp comment 'CF_AUTO'
+    ufw allow from "$ip" to any port 443 proto tcp comment 'CF_AUTO'
+done
+
+ufw reload
+```
+Делаем файл исполняемым и запускаем первый раз ручками:
+```bash
+sudo chmod +x /etc/cron.weekly/cloudflare-ufw
+sudo /etc/cron.weekly/cloudflare-ufw
+```
+Скрипт сам встал в еженедельный крон и будет обновлять айпишники Cloudflare в фоне.
