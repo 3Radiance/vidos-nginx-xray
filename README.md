@@ -584,7 +584,6 @@ sudo tar -xzvf wstunnel_10.6.1_linux_amd64.tar.gz
 sudo mv wstunnel /usr/local/bin/
 sudo chmod +x /usr/local/bin/wstunnel
 ```
-upd:
 Закрываем сервак для всех кроме клоудфаер
 В чём прикол: 
 Из-за утечек домена и IP (например, через DNS или старые логи), боты и цензоры могут постучаться напрямую на ваш реальный IP-адрес, подсунув в SNI ваш валидный домен. 
@@ -594,17 +593,17 @@ upd:
 Сервер полностью пропадает с радаров глобального интернета.
 Как сделать:
 Сносим старые глобальные правила в UFW, чтобы порты 80 и 443 больше не светились на весь мир: 
-```bash
+```
 sudo ufw delete allow 80/tcp
 sudo ufw delete allow 443/tcp
 ```
 Пишем «умный» автоматический скрипт с комментариями правил, чтобы ufw не забивался дубликатами. 
 Создаем файл:
-
+```
 sudo nano /etc/cron.weekly/cloudflare-ufw
-
+```
 Вставляем Bash-код:
-```bash
+```
 #!/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
@@ -634,8 +633,91 @@ done
 ufw reload
 ```
 Делаем файл исполняемым и запускаем первый раз ручками:
-```bash
+```
 sudo chmod +x /etc/cron.weekly/cloudflare-ufw
 sudo /etc/cron.weekly/cloudflare-ufw
 ```
 Скрипт сам встал в еженедельный крон и будет обновлять айпишники Cloudflare в фоне.
+
+Так же дополнительно добавим крон задачу для подставления реалных айпи от клоды и коректной работы кровдсека.
+
+Заходим:
+```
+sudo nano /etc/nginx/nginx.conf
+```
+Листаем до:
+```
+real_ip_header CF-Connecting-IP;
+real_ip_recursive on;
+set_real_ip_from 103.21.244.0/22;
+...
+...
+...
+```
+
+ставим теги вот так для работы скрипта:
+  ```
+   # CF_REALIP_BEGIN
+    real_ip_header CF-Connecting-IP;
+    real_ip_recursive on;
+    set_real_ip_from 103.21.244.0/22;
+    # ... остальные старые строчки можно оставить, скрипт их сам перезапишет ...
+    # CF_REALIP_END
+```
+
+Далее создаем скрипт:
+```
+sudo nano /usr/local/bin/update-cf-realip.sh
+```
+После вставляем bash скрипт + питон:
+```
+#!/bin/bash
+
+NGINX_CONF="/etc/nginx/nginx.conf"
+
+TEMP_FILE=$(mktemp)
+
+
+echo "    real_ip_header CF-Connecting-IP;" > "$TEMP_FILE"
+echo "    real_ip_recursive on;" >> "$TEMP_FILE"
+
+
+for ip in $(curl -s https://www.cloudflare.com/ips-v4); do
+    echo "    set_real_ip_from $ip;" >> "$TEMP_FILE"
+done
+
+python3 -c "
+with open('$NGINX_CONF', 'r') as f:
+    content = f.read()
+with open('$TEMP_FILE', 'r') as f:
+    new_block = f.read()
+
+import re
+pattern = r'(# CF_REALIP_BEGIN\n).*?(# CF_REALIP_END)'
+replacement = r'\1' + new_block + r'\2'
+
+if re.search(pattern, content, re.DOTALL):
+    new_content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+    with open('$NGINX_CONF', 'w') as f:
+        f.write(new_content)
+    print('Updated successfully')
+else:
+    print('Error: Tags # CF_REALIP_BEGIN / # CF_REALIP_END not found in config!')
+"
+
+rm "$TEMP_FILE"
+
+
+nginx -t && systemctl reload nginx
+```
+ctrl + x yes enter
+После:
+```
+sudo chmod +x /usr/local/bin/update-cf-realip.sh
+
+sudo crontab -e
+```
+и добавляем в самый низ строку:
+```
+0 4 * * 1 /usr/local/bin/update-cf-realip.sh >/dev/null 2>&1
+```
