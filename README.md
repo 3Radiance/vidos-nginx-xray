@@ -582,7 +582,7 @@ sudo wget https://github.com/erebe/wstunnel/releases/download/v10.6.1/wstunnel_1
 sudo tar -xzvf wstunnel_10.6.1_linux_amd64.tar.gz
 sudo mv wstunnel /usr/local/bin/
 sudo chmod +x /usr/local/bin/wstunnel
-
+```
 upd:
 Закрываем сервак для всех кроме клоудфаер
 В чём прикол: 
