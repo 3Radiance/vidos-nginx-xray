@@ -721,3 +721,100 @@ sudo crontab -e
 ```
 0 4 * * 1 /usr/local/bin/update-cf-realip.sh >/dev/null 2>&1
 ```
+
+Ставим варп на сервер:
+Обычно как люди используют WARP? Скачивают приложение на телефон или комп, нажимают кнопку и плачут, когда ТСПУ банит протокол. Мы пойдём другим путём. Мы взяли этот самый WARP, лишили его зубов, привязали на цепь на самом выходе из своего VPS-бункера и заставили работать как локальный прокси-ротатор для чистки хвостов.
+
+Связка выглядит так: ... ➔ Xray ➔ WARP (внутри сервера) ➔ Конечный сайт.
+Зачем это нужно?
+Когда вы ходите на сайты через личный VPN, вы светите IP-адресом своего хостинга (Hetzner, DigitalOcean, RuVDS и т.д.). Для систем слежки и крупных сервисов вы выглядите подозрительно.
+Google начинает бесконечно душить вас капчами.
+Стриминги (Netflix, Кинопоиск) и банки сразу блокируют доступ, потому что «трафик из дата-центров запрещен».
+
+Но когда исходящий трафик из Xray падает в локальный WireGuard-туннель Клоды, происходит магия. Конечный сайт видит чистый, белый, домашний/корпоративный IP-адрес самой Cloudflare. Для него вы обычный человек, который сидит в интернете. Цифровой след хостинга стерт полностью.
+
+1. Ставим официальный клиент на VPS:
+```
+curl -fsSl https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
+sudo apt update && sudo apt install cloudflare-warp -y
+```
+2. Обходим баги кодировок Rust при регистрации:
+
+Утилита часто паникует при интерактивном вводе y в терминале. Пробиваем соглашение лицензии напрямую через pipe:
+```
+echo "yes" | warp-cli registration new
+```
+3. Переводим WARP в режим изолированного SOCKS5-прокси:
+
+Нам не нужно, чтобы он перехватывал весь трафик сервера (иначе вы потеряете доступ по SSH). Нам нужно, чтобы он просто слушал локальный порт.
+```
+warp-cli mode proxy
+warp-cli proxy port 40000
+warp-cli connect
+```
+Проверяем локальный стык: 
+```
+curl -4 --socks5-hostname 127.0.0.1:40000 https://ifconfig.me
+```
+Выплюнет IP Клоды мы в дамках.
+4. Натравливаем Xray на WARP:
+
+В конфиге Xray (config.json или через панель в xray configs -> advanced) добавляем этот прокси на первое место:
+```
+"outbounds": [
+  {
+    "tag": "warp-out",
+    "protocol": "socks",
+    "settings": {
+      "servers": [{ "address": "127.0.0.1", "port": 40000 }]
+    }
+  },
+  { "tag": "direct", "protocol": "freedom" }
+]
+```
+Конечный оутбаунд должен выглядить так:
+```
+  "outbounds": [
+    {
+      "tag": "warp-out",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "127.0.0.1",
+            "port": 40000
+          }
+        ]
+      }
+    },
+    {
+      "tag": "direct",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "AsIs",
+        "finalRules": [
+          {
+            "action": "allow"
+          }
+        ]
+      }
+    },
+    {
+      "tag": "blocked",
+      "protocol": "blackhole",
+      "settings": {}
+    }
+  ],
+```
+Рестартартим ядро пишем:
+```
+x-ui 
+```
+и выбераем 15.
+
+Что в итоге?
+
+Пинг между Xray и WARP 0 мс, потому что пакеты прыгают внутри оперативки одного процессора.
+
+При этом вы разрываете прямую связь между вашим домашним IP и сайтом дважды: на входе ваш провайдер видит только Cloudflare CDN, а на выходе сайт видит только Cloudflare WARP. Интернет зациклился сам в себе, капчи исчезли, анонимность вышла на Enterprise-уровень.
