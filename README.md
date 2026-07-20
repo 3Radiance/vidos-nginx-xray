@@ -314,7 +314,7 @@ events {
 }
 
 http {
-    # Получение реального IP адреса за Cloudflare
+    # CF_REALIP_BEGIN
     real_ip_header CF-Connecting-IP;
     real_ip_recursive on;
     set_real_ip_from 103.21.244.0/22;
@@ -332,6 +332,7 @@ http {
     set_real_ip_from 190.93.240.0/20;
     set_real_ip_from 197.234.240.0/22;
     set_real_ip_from 198.41.128.0/17;
+    # CF_REALIP_BEGIN
 
     log_format custom '$remote_addr - $remote_user [$time_local] "$request" '
                       '$status $body_bytes_sent "$http_range" "$sent_http_content_range"';
